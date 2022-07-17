@@ -4,7 +4,9 @@ const express=require("express");
 const bodyparser=require("body-parser");
 const mongoose=require("mongoose");
 const encrypt=require("mongoose-encryption");
-const md5=require("md5");
+// const md5=require("md5");
+const bcrypt=require("bcrypt");
+const saltRounds=10;
 const app=express();
 
 app.set("view engine","ejs");
@@ -35,33 +37,48 @@ app.get("/register",function(req,res){
 });
 
 app.post("/register",function(req,res){
-  const email=req.body.username;
-  const ps=md5(req.body.password)
-  const record=new Userlist({username:email,password:ps});
-  record.save(function(err){
+
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+    // Store hash in your password DB.
     if(err){
-    console.log(err);}
-    else{
-      console.log("inserted successfully");
+      console.log(err);
     }
-  });
+    else{
+    const email=req.body.username;
+    const ps=hash;
+    const record=new Userlist({username:email,password:ps});
+    record.save(function(err){
+      if(err){
+      console.log(err);}
+      else{
+        console.log("inserted successfully");
+      }
+    });}
+});
+
 
   res.render("secrets");
 });
 app.post("/login",function(req,res){
+
   const email=req.body.username;
-  const ps=md5(req.body.password);
+  const ps=req.body.password;
   Userlist.findOne({username:email},function(err,result){
     if(err){
       console.log(err);
     }
     else{
       if(result){
-         if(result.password===ps){
-           res.render("secrets");
-         }}
+         // if(result.password===ps){
+         //   res.render("secrets");
+         // }}
+         bcrypt.compare(ps, result.password, function(err, resu) {
+             if(resu===true){
+               res.render("secrets");
+             }
+       });
     }
-  });
+  }});
   // res.render("secrets");
 }
 );

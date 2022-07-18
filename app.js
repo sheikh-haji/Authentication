@@ -3,85 +3,111 @@ require('dotenv').config()
 const express=require("express");
 const bodyparser=require("body-parser");
 const mongoose=require("mongoose");
-const encrypt=require("mongoose-encryption");
-// const md5=require("md5");
-const bcrypt=require("bcrypt");
-const saltRounds=10;
+const ejs=require("ejs");
+const session = require('express-session');
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
 const app=express();
 
-app.set("view engine","ejs");
+
+
+
+
 app.use(bodyparser.urlencoded({extended:true}));
 app.use(express.static("public"));
+app.set('view engine', 'ejs');
+app.use(session({
+  secret: "Our little secret.",
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.listen(3000,function(req,res){
    console.log("listening to port 3000");
 });
 mongoose.connect("mongodb+srv://sheikhhaji18:"+process.env.PASSWORD+"@cluster0.2akiep0.mongodb.net/userDB",{useNewUrlParser:true});
-
+// mongoose.set("useCreateIndex", true);
+// plugin to put in the schema
 const user=new mongoose.Schema({username:String,password:String});
-user.plugin(encrypt,{secret:process.env.SECRETS,encryptedFields:["password"]});
-const Userlist=new mongoose.model("User",user);
+user.plugin(passportLocalMongoose);
+const User=new mongoose.model("user",user);
+// User is a collection
+passport.use(User.createStrategy());
 
-
-app.get("/",function(req,res){
-   res.render("home");
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+app.get("/", function(req, res){
+  res.render("home");
 });
 
-app.get("/login",function(req,res){
-   res.render("login");
+app.get("/login", function(req, res){
+  res.render("login");
 });
 
-app.get("/register",function(req,res){
-
+app.get("/register", function(req, res){
   res.render("register");
 });
 
-app.post("/register",function(req,res){
+app.get("/secrets", function(req, res){
+  if (req.isAuthenticated()){
+    res.render("secrets");
+  } else {
+    res.redirect("/login");
+  }
+});
 
-  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
-    // Store hash in your password DB.
+app.get("/logout", function(req, res){
+  req.logout(function(err){
     if(err){
-      console.log(err);
+      return err;
     }
-    else{
-    const email=req.body.username;
-    const ps=hash;
-    const record=new Userlist({username:email,password:ps});
-    record.save(function(err){
-      if(err){
-      console.log(err);}
-      else{
-        console.log("inserted successfully");
-      }
-    });}
+  });
+  res.redirect("/");
+});
+
+app.post("/register", function(req, res){
+
+  User.register({username: req.body.username}, req.body.password, function(err, user){
+    if (err) {
+      console.log(err);
+      res.redirect("/register");
+    } else {
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
+
+});
+
+app.post("/login", function(req, res){
+
+  const user = new User({
+    username: req.body.username,
+    password: req.body.password
+  });
+
+  req.login(user, function(err){
+    if (err) {
+      console.log(err);
+    } else {
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
+
 });
 
 
-  res.render("secrets");
-});
-app.post("/login",function(req,res){
 
-  const email=req.body.username;
-  const ps=req.body.password;
-  Userlist.findOne({username:email},function(err,result){
-    if(err){
-      console.log(err);
-    }
-    else{
-      if(result){
-         // if(result.password===ps){
-         //   res.render("secrets");
-         // }}
-         bcrypt.compare(ps, result.password, function(err, resu) {
-             if(resu===true){
-               res.render("secrets");
-             }
-       });
-    }
-  }});
-  // res.render("secrets");
-}
-);
-app.get("/logout",function(req,res){
-  res.render("home");
-})
+
+
+
+
+// app.listen(3000, function() {
+  // console.log("Server started on port 3000.");
+// });
